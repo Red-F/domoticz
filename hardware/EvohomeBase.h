@@ -23,6 +23,7 @@
 #pragma once
 
 #include "DomoticzHardware.h"
+#include <boost/date_time/c_local_time_adjustor.hpp>
 
 #define RFX_SETID3(ID,id1,id2,id3) {id1=ID>>16&0xFF;id2=ID>>8&0xFF;id3=ID&0xFF;}
 #define RFX_GETID3(id1,id2,id3) ((id1<<16)|(id2<<8)|id3)
@@ -219,12 +220,37 @@ public:
 		return szTmp;
 	}
 
+	// STATIC
+	static boost::posix_time::time_duration get_utc_offset() {
+		using namespace boost::posix_time;
+
+		// boost::date_time::c_local_adjustor uses the C-API to adjust a
+		// moment given in utc to the same moment in the local time zone.
+		typedef boost::date_time::c_local_adjustor<ptime> local_adj;
+
+		const ptime utc_now = second_clock::universal_time();
+		const ptime now = local_adj::utc_to_local(utc_now);
+
+		return now - utc_now;
+	}
+
 	template <class T> static std::string GetISODate(const T &in)
 	{
+		using namespace boost::posix_time;
 		if(in.year==0xFFFF)
 			return "";
+		time_duration utcOffset = get_utc_offset();
+		int32_t utcOffsetHours = utcOffset.hours();
+		uint8_t hrs = in.hrs - utcOffsetHours;
+		uint8_t mins = in.mins;
+
+		if (in.hrs == 0xFF)
+		{
+			hrs = 0 - utcOffsetHours;
+			mins = 0;
+		}
 		char szTmp[256];
-		sprintf(szTmp,std::string("%d-%02d-%02d").append((in.hrs!=0xFF)?"T%02d:%02d:00":"T00:00:00").c_str(),in.year,in.month,in.day,in.hrs,in.mins);
+		sprintf(szTmp,std::string("%d-%02d-%02dT%02d:%02d:00Z").c_str(),in.year,in.month,in.day,hrs,mins);
 		return szTmp;
 	}
 
@@ -326,7 +352,7 @@ public:
 		flgcmd=flgts<<1,//not optional but we can signal if we read it at least
 		flgps=flgcmd<<1,//not optional but we can signal if we read it at least
 		flgpay=flgps<<1,//not optional but we can signal if we read it at least
-		flgvalid=flgid1|flgpkt|flgcmd|flgps|flgpay,
+		flgvalid=flgpkt|flgcmd|flgps|flgpay,
 	};
 	enum packettype{
 		pktunk,
@@ -375,7 +401,7 @@ public:
 		return true;
 	}
 
-	bool IsValid() const {return ((flags&flgvalid)==flgvalid)&&(flags&(flgid2|flgid3));}
+	bool IsValid() const {return ((flags&flgvalid)==flgvalid)&&(flags&(flgid1|flgid2|flgid3));}
 	bool DecodePacket(const char * rawmsg);
 
 	template<typename T> CEvohomeMsg& Add(const T &in){CEvohomeDataType::Add(in,payload,payloadsize);return *this;}

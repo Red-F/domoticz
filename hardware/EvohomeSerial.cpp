@@ -103,6 +103,16 @@ CEvohomeSerial::CEvohomeSerial(const int ID, const std::string &szSerialPort, co
 	RegisterDecoder(cmdExternalSensor,boost::bind(&CEvohomeSerial::DecodeExternalSensor,this, _1));
 	RegisterDecoder(cmdDeviceInfo,boost::bind(&CEvohomeSerial::DecodeDeviceInfo,this, _1));
 	RegisterDecoder(cmdBatteryInfo,boost::bind(&CEvohomeSerial::DecodeBatteryInfo,this, _1));
+
+	RegisterDecoder(cmdUnknown0009, boost::bind(&CEvohomeSerial::UnknownCommand, this, _1));
+	RegisterDecoder(cmdUnknown0100, boost::bind(&CEvohomeSerial::UnknownCommand, this, _1));
+	RegisterDecoder(cmdUnknown1100, boost::bind(&CEvohomeSerial::UnknownCommand, this, _1));
+	RegisterDecoder(cmdUnknown1F09,boost::bind(&CEvohomeSerial::UnknownCommand,this, _1));
+	RegisterDecoder(cmdUnknown1FD4,boost::bind(&CEvohomeSerial::UnknownCommand,this, _1));
+	RegisterDecoder(cmdUnknown22D9, boost::bind(&CEvohomeSerial::UnknownCommand, this, _1));
+	RegisterDecoder(cmdUnknown313F,boost::bind(&CEvohomeSerial::UnknownCommand,this, _1));
+	RegisterDecoder(cmdUnknown31D9,boost::bind(&CEvohomeSerial::UnknownCommand,this, _1));
+	RegisterDecoder(cmdUnknown3220,boost::bind(&CEvohomeSerial::UnknownCommand,this, _1));
 }
 
 
@@ -691,6 +701,8 @@ bool CEvohomeMsg::DecodePacket(const char * rawmsg)
 	int nid=0;
 	std::string line(rawmsg);
 	std::vector<std::string> tkns;
+	if (rawmsg[0] == '#') return false;
+	if (line.find("INCOMPLETE") != std::string::npos) return false;
 	boost::split(tkns,line,boost::is_any_of(" "),boost::token_compress_on);//There are sometimes 2 spaces between token 1 and 2 so we use token_compress_on to avoid an additional empty token
 	for (size_t i = 0; i < tkns.size(); i++)
 	{
@@ -790,6 +802,8 @@ void CEvohomeSerial::ProcessMsg(const char * rawmsg)
 {
 	CEvohomeMsg msg(rawmsg);
 	Log(rawmsg,msg);
+	if (rawmsg[0] == '#') return;
+	if (strstr(rawmsg, "INCOMPLETE") != NULL) return;
 	if(msg.IsValid())
 	{
 		if (GetControllerID()== 0xFFFFFF) // If we still have a dummy controller update the controller DeviceID list
@@ -1340,6 +1354,11 @@ bool CEvohomeSerial::DecodeSysInfo(CEvohomeMsg &msg)//10e0
 	return true;
 }
 
+// Prevent errors for 'known' unknown commands
+bool CEvohomeSerial::UnknownCommand(CEvohomeMsg &msg)
+{
+	return true;
+}
 
 bool CEvohomeSerial::DecodeZoneName(CEvohomeMsg &msg)
 {
@@ -1592,6 +1611,9 @@ bool CEvohomeSerial::DecodeActuatorCheck(CEvohomeMsg &msg)
 bool CEvohomeSerial::DecodeActuatorState(CEvohomeMsg &msg)
 {
 	char tag[] = "ACTUATOR_STATE";
+	if (msg.payloadsize == 1 || msg.payloadsize == 6 ) {
+		return UnknownCommand(msg);
+	}
 	if (msg.payloadsize != 3){
 		Log(false,LOG_ERROR,"evohome: %s: Error decoding command, unknown packet size: %d", tag, msg.payloadsize);
 		return false;

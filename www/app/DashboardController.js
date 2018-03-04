@@ -3279,7 +3279,7 @@ define(['app'], function (app) {
 						jj = 0;
 						bHaveAddedDivider = false;
 						$.each(data.result, function (i, item) {
-							if ((item.Type.indexOf('Heating') == 0) && (item.Favorite != 0)) {
+							if ((item.Type.indexOf('Heating') == 0) && (item.Favorite != 0) && (typeof item.Temp == 'undefined')) {
 								totdevices += 1;
 								if (jj == 0) {
 									//first time
